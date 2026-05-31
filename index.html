@@ -293,7 +293,7 @@ function speakResult(text) {
   // iOS Safari: cancelar cualquier utterance pendiente
   window.speechSynthesis.cancel();
 
-  const utter    = new SpeechSynthesisUtterance("Tu reto es: " + text);
+  const utter    = new SpeechSynthesisUtterance(" " + text);
   utter.lang     = "es-MX";
   utter.rate     = 0.9;
   utter.pitch    = 1.05;
