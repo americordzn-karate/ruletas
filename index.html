@@ -1,0 +1,465 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Ruleta Interactiva</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', Arial, sans-serif;
+    background: #1a1a2e;
+    color: #f0f0f0;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 24px 16px 40px;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 700;
+    letter-spacing: 2px;
+    margin-bottom: 20px;
+    color: #f5c842;
+    text-shadow: 0 2px 8px #0006;
+    text-align: center;
+  }
+
+  #selector-box {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+
+  #selector-box label {
+    font-size: 1rem;
+    color: #ccc;
+  }
+
+  #ruleta-select {
+    padding: 8px 18px;
+    border-radius: 8px;
+    border: 2px solid #f5c842;
+    background: #16213e;
+    color: #f0f0f0;
+    font-size: 1rem;
+    cursor: pointer;
+    outline: none;
+    min-width: 180px;
+  }
+
+  #ruleta-select:focus { border-color: #fff; }
+
+  #loading-msg {
+    color: #f5c842;
+    font-size: 0.95rem;
+    font-style: italic;
+  }
+
+  #wheel-container {
+    position: relative;
+    width: 420px;
+    height: 420px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #wheel-canvas {
+    border-radius: 50%;
+    box-shadow: 0 0 40px #0008, 0 0 0 6px #f5c842, 0 0 0 10px #333;
+    display: block;
+  }
+
+  /* Flecha indicadora */
+  #arrow {
+    position: absolute;
+    top: -18px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 0;
+    height: 0;
+    border-left: 16px solid transparent;
+    border-right: 16px solid transparent;
+    border-top: 36px solid #f5c842;
+    filter: drop-shadow(0 2px 4px #0008);
+    z-index: 10;
+  }
+
+  /* Centro decorativo */
+  #center-circle {
+    position: absolute;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: radial-gradient(circle, #f5c842 60%, #bfa020 100%);
+    border: 4px solid #fff;
+    box-shadow: 0 2px 12px #0006;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #spin-btn {
+    margin-top: 28px;
+    padding: 14px 48px;
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    background: linear-gradient(135deg, #f5c842 0%, #e0a800 100%);
+    color: #1a1a2e;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    box-shadow: 0 4px 18px #f5c84244;
+    transition: transform 0.1s, box-shadow 0.1s;
+  }
+
+  #spin-btn:hover { transform: scale(1.05); box-shadow: 0 6px 24px #f5c84266; }
+  #spin-btn:active { transform: scale(0.97); }
+  #spin-btn:disabled {
+    background: #555;
+    color: #999;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+  }
+
+  #result-box {
+    margin-top: 26px;
+    background: #16213e;
+    border: 2px solid #f5c842;
+    border-radius: 16px;
+    padding: 18px 32px;
+    text-align: center;
+    max-width: 400px;
+    width: 100%;
+    min-height: 68px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+  }
+
+  #result-label {
+    font-size: 0.85rem;
+    color: #aaa;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  #result-text {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #f5c842;
+    word-break: break-word;
+  }
+
+  #error-msg {
+    color: #ff6b6b;
+    font-size: 0.92rem;
+    margin-top: 8px;
+    text-align: center;
+    max-width: 420px;
+  }
+</style>
+</head>
+<body>
+
+<h1>🎡 Ruleta de Retos</h1>
+
+<div id="selector-box">
+  <label for="ruleta-select">Seleccionar ruleta:</label>
+  <select id="ruleta-select" disabled>
+    <option value="">-- Cargando... --</option>
+  </select>
+  <span id="loading-msg">Conectando con la base de datos…</span>
+</div>
+
+<div id="wheel-container">
+  <div id="arrow"></div>
+  <canvas id="wheel-canvas" width="400" height="400"></canvas>
+  <div id="center-circle"></div>
+</div>
+
+<button id="spin-btn" disabled>🎲 ¡Girar!</button>
+
+<div id="result-box">
+  <span id="result-label">Resultado</span>
+  <span id="result-text">Gira la ruleta para descubrir tu reto</span>
+</div>
+
+<div id="error-msg"></div>
+
+<script>
+// ──────────────────────────────────────────────
+//  CONFIGURACIÓN — Pega aquí tu URL de Apps Script
+// ──────────────────────────────────────────────
+const APPS_SCRIPT_URL = "PEGA_AQUÍ_TU_URL_DE_APPS_SCRIPT";
+
+// ──────────────────────────────────────────────
+//  PALETA DE COLORES (mostaza, negro, gris)
+// ──────────────────────────────────────────────
+const PALETTE = [
+  { bg: "#D4A017", text: "#1a1a2e" }, // Amarillo mostaza
+  { bg: "#1a1a1a", text: "#f5c842" }, // Negro
+  { bg: "#6b6b6b", text: "#f0f0f0" }, // Gris
+];
+
+// ──────────────────────────────────────────────
+//  ESTADO GLOBAL
+// ──────────────────────────────────────────────
+const canvas  = document.getElementById("wheel-canvas");
+const ctx     = canvas.getContext("2d");
+const select  = document.getElementById("ruleta-select");
+const spinBtn = document.getElementById("spin-btn");
+const resTxt  = document.getElementById("result-text");
+const errMsg  = document.getElementById("error-msg");
+const loadMsg = document.getElementById("loading-msg");
+
+let options     = [];
+let currentAngle = 0;   // ángulo actual de la ruleta (radianes)
+let isSpinning  = false;
+
+// Audio para el click (generado por Web Audio API)
+const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+function playClick() {
+  const osc  = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.connect(gain);
+  gain.connect(audioCtx.destination);
+  osc.type = "square";
+  osc.frequency.setValueAtTime(600, audioCtx.currentTime);
+  gain.gain.setValueAtTime(0.12, audioCtx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.055);
+  osc.start();
+  osc.stop(audioCtx.currentTime + 0.06);
+}
+
+// ──────────────────────────────────────────────
+//  DIBUJO DE LA RULETA
+// ──────────────────────────────────────────────
+function drawWheel(angle) {
+  const cx = canvas.width / 2;
+  const cy = canvas.height / 2;
+  const r  = cx - 6;
+  const n  = options.length;
+
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  if (n === 0) {
+    ctx.fillStyle = "#333";
+    ctx.beginPath();
+    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#888";
+    ctx.font = "16px Segoe UI";
+    ctx.textAlign = "center";
+    ctx.fillText("Sin opciones", cx, cy);
+    return;
+  }
+
+  const slice = (Math.PI * 2) / n;
+
+  for (let i = 0; i < n; i++) {
+    const start = angle + i * slice;
+    const end   = start + slice;
+    const color = PALETTE[i % PALETTE.length];
+
+    // Segmento
+    ctx.beginPath();
+    ctx.moveTo(cx, cy);
+    ctx.arc(cx, cy, r, start, end);
+    ctx.closePath();
+    ctx.fillStyle = color.bg;
+    ctx.fill();
+    ctx.strokeStyle = "#111";
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+
+    // Texto
+    ctx.save();
+    ctx.translate(cx, cy);
+    ctx.rotate(start + slice / 2);
+    ctx.textAlign = "right";
+    ctx.fillStyle = color.text;
+
+    const maxWidth = r * 0.78;
+    const fontSize = Math.max(10, Math.min(15, Math.floor(maxWidth / (options[i].length * 0.62 + 1))));
+    ctx.font = `bold ${fontSize}px Segoe UI`;
+
+    // Truncar texto si es muy largo
+    let label = options[i];
+    while (ctx.measureText(label).width > maxWidth - 30 && label.length > 4) {
+      label = label.slice(0, -1);
+    }
+    if (label !== options[i]) label += "…";
+
+    ctx.fillText(label, r - 12, fontSize / 3);
+    ctx.restore();
+  }
+
+  // Borde exterior dorado
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.strokeStyle = "#f5c842";
+  ctx.lineWidth = 4;
+  ctx.stroke();
+}
+
+// ──────────────────────────────────────────────
+//  ANIMACIÓN DE GIRO
+// ──────────────────────────────────────────────
+function spin() {
+  if (isSpinning || options.length === 0) return;
+  if (audioCtx.state === "suspended") audioCtx.resume();
+
+  isSpinning = true;
+  spinBtn.disabled = true;
+  resTxt.textContent = "Girando…";
+  errMsg.textContent = "";
+
+  const n           = options.length;
+  const slice       = (Math.PI * 2) / n;
+  // Vueltas entre 6 y 10 más un ángulo aleatorio
+  const totalSpin   = (Math.PI * 2) * (6 + Math.random() * 4) + Math.random() * Math.PI * 2;
+  const duration    = 5000 + Math.random() * 2000; // ms
+  const startAngle  = currentAngle;
+  const startTime   = performance.now();
+
+  // Índice del último segmento marcado para el click
+  let lastSegment = -1;
+
+  function easeOut(t) {
+    return 1 - Math.pow(1 - t, 4);
+  }
+
+  function animate(now) {
+    const elapsed  = now - startTime;
+    const progress = Math.min(elapsed / duration, 1);
+    const easedProgress = easeOut(progress);
+    const angle    = startAngle + totalSpin * easedProgress;
+
+    currentAngle = angle;
+    drawWheel(angle);
+
+    // Click sonoro al pasar cada segmento
+    if (options.length > 0) {
+      const normalizedAngle = ((angle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const topAngle = (Math.PI * 2) - normalizedAngle + Math.PI * 1.5;
+      const seg = Math.floor(((topAngle % (Math.PI * 2)) / (Math.PI * 2)) * n) % n;
+      if (seg !== lastSegment) {
+        playClick();
+        lastSegment = seg;
+      }
+    }
+
+    if (progress < 1) {
+      requestAnimationFrame(animate);
+    } else {
+      // Calcular el segmento ganador
+      // La flecha apunta hacia arriba (ángulo -π/2)
+      // El segmento en la cima es el que contiene el ángulo (-π/2 - currentAngle)
+      const finalAngle = ((currentAngle % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2);
+      const pointerAngle = ((Math.PI * 1.5) - finalAngle + Math.PI * 2) % (Math.PI * 2);
+      const winnerIndex = Math.floor((pointerAngle / (Math.PI * 2)) * n) % n;
+
+      resTxt.textContent = options[winnerIndex];
+      isSpinning = false;
+      spinBtn.disabled = false;
+    }
+  }
+
+  requestAnimationFrame(animate);
+}
+
+// ──────────────────────────────────────────────
+//  CARGA DE DATOS DESDE APPS SCRIPT
+// ──────────────────────────────────────────────
+async function fetchJSON(url) {
+  const res = await fetch(url, { redirect: "follow" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+async function loadSheets() {
+  try {
+    const data = await fetchJSON(`${APPS_SCRIPT_URL}?action=getSheets`);
+    if (data.error) throw new Error(data.error);
+
+    select.innerHTML = "";
+    data.sheets.forEach(name => {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      select.appendChild(opt);
+    });
+
+    select.disabled = false;
+    loadMsg.textContent = `${data.sheets.length} ruleta(s) encontrada(s).`;
+
+    // Cargar la primera ruleta automáticamente
+    await loadOptions(data.sheets[0]);
+  } catch (err) {
+    loadMsg.textContent = "";
+    errMsg.textContent = `Error al cargar hojas: ${err.message}. Revisa la URL de Apps Script.`;
+    drawWheel(0);
+  }
+}
+
+async function loadOptions(sheetName) {
+  options = [];
+  spinBtn.disabled = true;
+  resTxt.textContent = "Cargando opciones…";
+  errMsg.textContent = "";
+  drawWheel(0);
+
+  try {
+    const encoded = encodeURIComponent(sheetName);
+    const data = await fetchJSON(`${APPS_SCRIPT_URL}?action=getOptions&sheet=${encoded}`);
+    if (data.error) throw new Error(data.error);
+
+    options = data.options;
+
+    if (options.length === 0) {
+      errMsg.textContent = `La hoja "${sheetName}" no tiene opciones en la columna Nombre.`;
+      drawWheel(0);
+      return;
+    }
+
+    currentAngle = 0;
+    drawWheel(0);
+    spinBtn.disabled = false;
+    resTxt.textContent = "Gira la ruleta para descubrir tu reto";
+  } catch (err) {
+    errMsg.textContent = `Error al cargar opciones: ${err.message}`;
+    drawWheel(0);
+  }
+}
+
+// ──────────────────────────────────────────────
+//  EVENTOS
+// ──────────────────────────────────────────────
+select.addEventListener("change", () => loadOptions(select.value));
+spinBtn.addEventListener("click", spin);
+
+// ──────────────────────────────────────────────
+//  INICIALIZACIÓN
+// ──────────────────────────────────────────────
+if (APPS_SCRIPT_URL === "https://script.google.com/macros/s/AKfycbyIzS6h-v2etceTGtyvpgscOE_EZXKRKO7wAwhMbWcpI1RxPjR2SGMEg8EzP4yV7pjm2A/exec") {
+  loadMsg.textContent = "";
+  errMsg.textContent = "⚠️ Configura la variable APPS_SCRIPT_URL con tu URL de Apps Script.";
+  drawWheel(0);
+} else {
+  loadSheets();
+}
+</script>
+</body>
+</html>
